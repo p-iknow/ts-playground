@@ -176,7 +176,7 @@ d.map(_ => {
 
 ```
 
-- 배열이 정의된 scope를 벗어나면 해당 배열은 더 이상 확장할 수 없게 된다.(예를 들어 함수에서 배열을 선언 한 다음 해당 배열을 반환 한 경우)
+- 배열이 정의된 scope를 벗어나면 해당 배열은 더 이상 확장할 수 없게 된다.(예를 들어 함수에서 배열을 선언 한 다음 해당 배열을 반환 한 경우가 그렇다)
 ```ts
 function buildArray() {
   let a = []                // any[]
@@ -190,3 +190,67 @@ myArray.push(true)          // Error 2345: Argument of type 'true' is not
                             // assignable to parameter of type 'string | number'.
 
 ```
+## Tuple
+- 대다수의 다른 타입과 다르게 튜플은 타입 추론을 할 수 없고 선언 당시에 타입을 꼭 명시해야 한다. 이는 자바스크립트의 문법이 array 와 tuple 에 대해 `[] ` 로 모두 동일하고, 타입스크립트에는 `[]` 에서 배열을 추론하는 규칙이 이미 있기 때문이다.  
+  
+```ts
+let a: [number] = [1]
+
+// A tuple of [first name, last name, birth year]
+let b: [string, string, number] = ['malcolm', 'gladwell', 1963]
+
+b = ['queen', 'elizabeth', 'ii', 1926]  // Error TS2322: Type 'string' is not
+                                        // **assignable** to type 'number'.
+```
+### Tuple, optional support
+```ts
+// An array of train fares, which sometimes vary depending on direction
+let trainFares: [number, number?][] = [
+  [3.75],
+  [8.25, 7.70],
+  [10.50]
+]
+
+// Equivalently:
+let moreTrainFares: ([number] | [number, number])[] = [
+  // ...
+]
+
+```
+### Tuple, rest element support
+```ts
+// A list of strings with at least 1 element
+let friends: [string, ...string[]] = ['Sara', 'Tali', 'Chloe', 'Claire']
+
+// A heterogeneous list
+let list: [number, boolean, ...string[]] = [1, false, 'a', 'b', 'c']
+```
+
+### Tuple, lenght
+- Tuple type 은 list의 length 값 또한 capture 한다.  
+
+### Read-only array and Tuple 
+- `readonly` 키워드를 통해 immutable 한 array 를 만들 수 있다.
+- readonly array type 에 대해서는 `.concat, .slice` 와 같은 immutable method 만 사용할 수 있다. 
+```ts
+let as: readonly number[] = [1, 2, 3]     // readonly number[]
+let bs: readonly number[] = as.concat(4)  // readonly number[]
+let three = bs[2]                         // number
+as[4] = 5            // Error TS2542: Index signature in type
+                     // 'readonly number[]' only permits reading.
+as.push(6)           // Error TS2339: Property 'push' does not
+                     // exist on type 'readonly number[]'.
+```
+long form 으로 readonly array와 tuple 을 사용할 수도 있다.
+```ts
+type A = readonly string[]           // readonly string[]
+type B = ReadonlyArray<string>       // readonly string[]
+type C = Readonly<string[]>          // readonly string[]
+
+type D = readonly [number, string]   // readonly [number, string]
+type E = Readonly<[number, string]>  // readonly [number, string]
+
+Cherny, Boris. Programming TypeScript . O'Reilly Media. Kindle Edition. 
+```
+- readonly array를 남용한다면 작은 업데이트에도 매번 값 복사가 일어나고 이는 runtime performance 를 해칠 수 있다. 
+- 작은 사이즈의 배열인 경우 오버 헤드가 거의 눈에 띄지 않지만 더 큰 배열의 경우 오버 헤드가 상당히 커질 수 있다.
