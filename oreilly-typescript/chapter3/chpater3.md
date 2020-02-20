@@ -60,7 +60,7 @@ let i = e === f             // Error TS2367: This condition will always return
 
 ```
 
-## Object 
+# Object 
 
 ### type object 
 - 단순히 object 타입을 선언하는 것은 any 와 비슷하며, 
@@ -120,7 +120,7 @@ let a: {
 ### 정리 
 ![object-type-table](https://imgur.com/CBrSKXc.png)
 
-## Type Alias
+# Type Alias
 - type alias 선언의 경우에도 javascript const, let과 같이 block scope 를 가지며, shadow도 동일하게 적용된다.
 ```ts
 type Color = 'red'
@@ -136,7 +136,7 @@ if (x) {
 
 ```
 
-## Array
+# Array
 
 ```ts
 let a = [1, 2, 3]           // number[]
@@ -190,7 +190,7 @@ myArray.push(true)          // Error 2345: Argument of type 'true' is not
                             // assignable to parameter of type 'string | number'.
 
 ```
-## Tuple
+# Tuple
 - 대다수의 다른 타입과 다르게 튜플은 타입 추론을 할 수 없고 선언 당시에 타입을 꼭 명시해야 한다. 이는 자바스크립트의 문법이 array 와 tuple 에 대해 `[] ` 로 모두 동일하고, 타입스크립트에는 `[]` 에서 배열을 추론하는 규칙이 이미 있기 때문이다.  
   
 ```ts
