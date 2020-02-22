@@ -423,6 +423,8 @@ var JustEnumNumber;
 
 console.log(JustNumber.one); // 1
 ```
+- [[TS] 8. enum vs const enum, Jbee 블로그](https://jbee.io/typescript/TS-8-enum-vs-const-enum/)
+
 
 ### const enum을 사용할 때 문제점 
 - const 와 함께 선언된 enum을 다른 파일로 부터 import 해서 사용할 때 우리가 이미 컴파일을 끝낸 뒤에 enum의 작성자가 enum을 업데이트 한다면 우리가 사용하는 enum의 version 과 작성자의 enum version 이 다르다. 타입스크립트는 이 문제를 해결해주지 못한다. 
