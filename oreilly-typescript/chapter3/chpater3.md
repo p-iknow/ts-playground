@@ -254,3 +254,183 @@ Cherny, Boris. Programming TypeScript . O'Reilly Media. Kindle Edition.
 ```
 - readonly array를 남용한다면 작은 업데이트에도 매번 값 복사가 일어나고 이는 runtime performance 를 해칠 수 있다. 
 - 작은 사이즈의 배열인 경우 오버 헤드가 거의 눈에 띄지 않지만 더 큰 배열의 경우 오버 헤드가 상당히 커질 수 있다.
+
+# null, undefined, void, and never
+
+```ts
+// (a) A function that returns a number or null
+function a(x: number) {
+  if (x < 10) {
+    return x
+  }
+  return null
+}
+
+// (b) A function that returns undefined
+function b() {
+  return undefined
+}
+
+// (c) A function that returns void
+function c() {
+  let a = 2 + 2
+  let b = a * a
+}
+
+// (d) A function that returns never
+function d() {
+  throw TypeError('I always error')
+}
+
+// (e) Another function that returns never
+function e() {
+  while (true) {
+    doSomething()
+  }
+}
+```
+- `e` 영원히 return 하지 않고 계속해서 반복하므로 `nerver` type 으로 정의 된다. 
+- `unknown`type 이 모든 type 의 super tpye 이라면 `never` type은 모든 type의 subtype 이다.   
+- 즉 다른 모든 타입에 never type 인 값을 지정할 수 있다는 의미이다. 
+
+# Enum
+- 타입스크립트는 자동으로 enum의 value 를 추론(index 0 ~ ++1) 하는데, 타입을 명시적으로 선언할 수 있다.
+```ts
+enum Language {
+  English = 0,
+  Spanish = 1,
+  Russian = 2
+}
+```
+### unsafe acess
+```ts
+enum Color {
+  Red = '#c10000',
+  Blue = '#007ac1',
+  Pink = 0xc10050,        // A hexadecimal literal
+  White = 255             // A decimal literal
+}
+
+let red = Color.Red       // Color
+let pink = Color.Pink     // Color
+
+let a = Color.Red         // Color
+let b = Color.Green       // Error TS2339: Property 'Green' does not exist
+                          // on type 'typeof Color'.
+let c = Color[0]          // string
+let d = Color[6]          // string (!!!)
+
+Cherny, Boris. Programming TypeScript . O'Reilly Media. Kindle Edition. 
+```
+- 접근시에 편의상 key, value 를 통해 모두 접근 가능하다. 
+- 다만 `let d = Color[6]` 처럼 존재하지 않는 value 에도 접근이 가능하다는 점을 주의해야 한다. 이를 방지하기 위해서는 enum을 const 와 함께 써야 한다. 
+
+```ts
+const enum Language {
+  English,
+  Spanish,
+  Russian
+}
+
+// Accessing a valid enum key
+let a = Language.English  // Language
+
+// Accessing an invalid enum key
+let b = Language.Tagalog  // Error TS2339: Property 'Tagalog' does not exist
+                          // on type 'typeof Language'.
+
+// Accessing a valid enum value
+let c = Language[0]       // Error TS2476: A const enum member can only be
+                          // accessed using a string literal.
+
+// Accessing an invalid enum value
+let d = Language[6]       // Error TS2476: A const enum member can only be
+                          // accessed using a string literal.
+```
+- `const enum` 의 경우 `reverse lookup(값을 통해 enum에 접근하는 것)` 을 지원하지 않아, js 의 object 타입 처럼 작동한다. 
+
+### enum 의 취약점 
+```ts
+const enum Flippable {
+  Burger,
+  Chair,
+  Cup,
+  Skateboard,
+  Table
+}
+
+function flip(f: Flippable) {
+  return 'flipped it'
+}
+
+flip(Flippable.Chair)     // 'flipped it'
+flip(Flippable.Cup)       // 'flipped it'
+flip(12)                  // 'flipped it' (!!!)
+
+```
+- enum의 value 가 'string' 이 아닌 경우 enum 에 숫자 값을 대입할 수 있다. 이를 고치기 위해서는 enum value가 'string' 이어야 한다. 
+
+```ts
+const enum Flippable {
+  Burger = 'Burger',
+  Chair = 'Chair',
+  Cup = 'Cup',
+  Skateboard = 'Skateboard',
+  Table = 'Table'
+}
+
+function flip(f: Flippable) {
+  return 'flipped it'
+}
+
+flip(Flippable.Chair)     // 'flipped it'
+flip(Flippable.Cup)       // 'flipped it'
+flip(12)                  // Error TS2345: Argument of type '12' is not
+                          // assignable to parameter of type 'Flippable'.
+flip('Hat')               // Error TS2345: Argument of type '"Hat"' is not
+                          // assignable to parameter of type 'Flippable'.
+```
+- 단 하나의 숫자로 인해 전체 enum이 망가질 수 있다. 때문에 enum 사용을 피하고, 어쩔 수 없이 enum을 사용해야 하는 순간에는 numeric enmu 고= 
+
+### const enum 자바스크립트로 컴파일 됬을 때 
+- enmu 의 경우 자바스크립트로 컴파일 됬을 때 해당 enum의 number's value 값으로 바뀌게 되고, 별도 자바스크립트 코드를 생성하지 않는다. 
+```ts
+const enum Language {
+  English,
+  Spanish,
+  Russian
+}
+```
+- 예를 들면 코드에 쓰인 모든 Language.Spanish 는 1로 변환된다.
+### 일반적인 enum 의 경우 다음과 같이 컴파일 된다. 
+- 일반적인 enum 의 경우 inline 이 발생하지 않고 아래와 같은 객체를 만들어 reverse lookup 이 가능하다. 
+```ts
+// ts
+enum JustEnumNumber {
+  zero,
+  one
+}
+
+console.log(JustNumber.one); // 1
+
+//js
+
+var JustEnumNumber;
+(function(JustEnumNumber) {
+  JustEnumNumber[(JustEnumNumber["zero"] = 0)] = "zero";
+  JustEnumNumber[(JustEnumNumber["one"] = 1)] = "one";
+})(JustEnumNumber || (JustEnumNumber = {}));
+
+console.log(JustNumber.one); // 1
+```
+
+### const enum을 사용할 때 문제점 
+- const 와 함께 선언된 enum을 다른 파일로 부터 import 해서 사용할 때 우리가 이미 컴파일을 끝낸 뒤에 enum의 작성자가 enum을 업데이트 한다면 우리가 사용하는 enum의 version 과 작성자의 enum version 이 다르다. 타입스크립트는 이 문제를 해결해주지 못한다. 
+- const 와 함께 enum을 사용하려 한다면 inlining 을 피하고 자신의 컨트롤 영역에 있는(import 되거나 npm 에 퍼블리싱 하지 않을)코드에만 사용하라
+
+# Summary 
+- 타입스크립트가 타입을 추론하게 할 수도 있고 명시적으로 타입을 적어 수도 있다.
+- const 키워드를 적으면 타입스크립트가 보다 세부적인 타입(type literal)을 추론(infer) 하고, var 혹은 let 키워드의 경우 보다 general 한 타입을 추론한다. 
+- 대다수의 타입은 general 한 부분과 sepecific 한 부분이 있는데, specific 한 부분을 general 한 부분의 `subtype` 이라 한다. 
+
+![Types and their more specific subtypes](https://imgur.com/6RXN3rg.png)
