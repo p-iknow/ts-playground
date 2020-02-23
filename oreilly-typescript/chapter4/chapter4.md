@@ -287,3 +287,361 @@ function warnUser(warning) {
 warnUser.wasCalled = false
 
 ```
+
+## Polymorphism 
+```ts
+// filter function body
+function filter(array, f) {
+  let result = []
+  for (let i = 0; i < array.length; i++) {
+    let item = array[i]
+    if (f(item)) {
+      result.push(item)
+    }
+  }
+  return result
+}
+
+filter([1, 2, 3, 4], _ => _ < 3) // evaluates to [1, 2]
+
+// filter type 
+type Filter = {
+  (array: number[], f: (item: number) => boolean): number[]
+  (array: string[], f: (item: string) => boolean): string[]
+  (array: object[], f: (item: object) => boolean): object[]
+}
+
+// filter use 
+let result = filter(
+  names,
+  _ => _.firstName.startsWith('b')
+) // Error TS2339: Property 'firstName' does not exist on type 'object'.
+
+result[0].firstName // Error TS2339: Property 'firstName' does not exist
+                    // on type 'object'.
+```
+- type object 는 그것이 object type 이라는 것 외에는 아무것도 알려주지 않는다. 그 안에 내부적으로 어떤 property or method 가 있는지는 알 수 없다. 
+- 때문에 object type을 쓴 overload signature로는 filter 함수를 표현하기 어렵다. 
+- 이럴때 필요한게 `generic type parameter` 이다.
+
+### Generic Type Parameter
+A placeholder type used to enforce a type-level constraint in multiple places. Also known as `polymorphic type parameter`.
+
+```ts
+type Filter = {
+  <T>(array: T[], f: (item: T) => boolean): T[]
+}
+
+type Filter = {
+  <T>(array: T[], f: (item: T) => boolean): T[]
+}
+
+let filter: Filter = (array, f) => // ...
+
+// (a) T is bound to number
+filter([1, 2, 3], _ => _ > 2)
+
+// (b) T is bound to string
+filter(['a', 'b'], _ => _ !== 'b')
+
+// (c) T is bound to {firstName: string}
+let names = [
+  {firstName: 'beth'},
+  {firstName: 'caitlyn'},
+  {firstName: 'xin'}
+]
+filter(names, _ => _.firstName.startsWith('b'))
+
+```
+### When Are Generics Bound?
+generic type 을 어디 선언했는지는 tpye 의 scope 뿐만 아니라 언제 type이 binding 될지까지도 결정한다. 아래 예제를 살펴보자.
+```ts
+type Filter = {
+  <T>(array: T[], f: (item: T) => boolean): T[]
+}
+
+let filter: Filter = (array, f) =>
+  // ...
+```
+위 코드는 generic type 을 call signature (`()`의 앞에) 의 일부로 선언했으므로 함수를 call 할 때 type 이 binding 된다. 
+
+만약 우리가 generic type 의 scope을 type alias 인 Filter 로 정의했다면, 우리는 Filter Type 을 사용할 때 generic type에 사용될 타입을 전달해야 한다. 아래 예제를 살펴보자
+```ts
+Filter: type Filter<T> = {
+  (array: T[], f: (item: T) => boolean): T[]
+}
+
+let filter: Filter = (array, f) => // Error TS2314: Generic type 'Filter'
+  // ...                           // requires 1 type argument(s).
+
+type OtherFilter = Filter          // Error TS2314: Generic type 'Filter'
+                                   // requires 1 type argument(s).
+
+let filter: Filter<number> = (array, f) =>
+  // ...
+
+type StringFilter = Filter<string>
+let stringFilter: StringFilter = (array, f) =>
+  // ...
+```
+일반적으로, generic type을 사용하는 순간 concrete type bind 한다고 생각하면 된다. 예를 들어 보자. 함수라면 함수를 call 할때가 될 것이고, clsss 라면 생성자 함수를 호출할 때(instantiate) 이고, type aliases 혹은 interface 라면 그것들을 적용(implement)하는 순간에 concrete type 을 bind 한다.   
+
+### Where Can You Declare Generics?
+generic type 을 선언하는 여러 방식이 있는데 다음과 같다.
+```ts
+// 1 
+type Filter = { 
+  <T>(array: T[], f: (item: T) => boolean): T[]
+}
+let filter: Filter = // ...
+
+// 2
+type Filter<T> = { 
+  (array: T[], f: (item: T) => boolean): T[]
+}
+let filter: Filter<number> = // ...
+
+// 3
+type Filter = <T>(array: T[], f: (item: T) => boolean) => T[] 
+let filter: Filter = // ...
+
+// 4
+type Filter<T> = (array: T[], f: (item: T) => boolean) => T[] 
+let filter: Filter<string> = // ...
+
+
+// 5
+function filter<T>(array: T[], f: (item: T) => boolean): T[] { 
+  // ...
+}
+```
+1. single signature 로 사용됬으며, 함수를 call 할때 binding 한다
+2. type alias 로 사용됬으며, 함수를 선언할 때 binding 한다. 
+3. 1와 동작은 같고, 단지 표기법이 short hand 일 뿐이다. 
+4. 2와 동작은 같고, 단지 표기법이 short hand 일 뿐이다. 
+5. named function signature(기명함수 표기)로 함수를 call 할 때 bind 하고, 각각의 함수 call 각 call 나름의 타입 binding을 갖느다. 
+
+map function 을 가지고 예를 들어보자 
+```ts
+// sketch
+function map(array: unknown[], f: (item: unknown) => unknown): unknown[] {
+  let result = []
+  for (let i = 0; i < array.length; i++) {
+    result[i] = f(array[i])
+  }
+  return result
+}
+
+// 구현 
+function map<T, U>(array: T[], f: (item: T) => U): U[] {
+  let result = []
+  for (let i = 0; i < array.length; i++) {
+    result[i] = f(array[i])
+  }
+  return result
+}
+```
+
+### Filter and Map in Standard Library 
+`<T>` 의 경우 type alias에, `<U>` 의 경우 call signature의 scope 를 가지고 있는 것에 주목하자.
+```ts
+interface Array<T> {
+  filter(
+    callbackfn: (value: T, index: number, array: T[]) => any,
+    thisArg?: any
+  ): T[]
+  map<U>(
+    callbackfn: (value: T, index: number, array: T[]) => U,
+    thisArg?: any
+  ): U[]
+}
+```
+
+### Generic Type Inference
+기본적으로 generic type 은 전달된 paramter로 부터 추론을 통해 타입을 확정할 수 있지만, 함수 call 시에 타입을 명시적으로 정의할 수도 있다. 
+```ts
+function map<T, U>(array: T[], f: (item: T) => U): U[] {
+  // ...
+}
+
+map(
+  ['a', 'b', 'c'],  // An array of T
+  _ => _ === 'a'    // A function that returns a U
+)
+
+//  You can, however, explicitly annotate your generics too. 
+// Explicit annotations for generics are all-or-nothing; 
+// either annotate every required generic type, or none of them: 
+
+ map <string, boolean>(
+  ['a', 'b', 'c'],
+  _ => _ === 'a'
+)
+
+map   <string>( // Error TS2558: Expected 2 type arguments, but got 1.
+  ['a', 'b', 'c'],
+  _ => _ === 'a'
+)
+// OK, because boolean is assignable to boolean | string
+map<string, boolean | string>(
+  ['a', 'b', 'c'],
+  _ => _ === 'a'
+)
+
+map<string, number>(
+  ['a', 'b', 'c'],
+  _ => _ === 'a'  // Error TS2322: Type 'boolean' is not assignable
+)                 // to type 'number'.
+```
+그리고 타입 추론이 아닌 타입을 명시적으로 전달해야 하는 경우가 있는데 바로 Promise 를 사용할 때 이다. 아래 예제를 보자 
+
+```ts
+let promise = new Promise(resolve =>
+  resolve(45)
+)
+promise.then(result => // Inferred as {}
+  result * 4 // Error TS2362: The left-hand side of an arithmetic operation must
+) 
+
+let promise = new Promise<number>(resolve =>
+  resolve(45)
+)
+promise.then(result => // number
+  result * 4
+)// be of type 'any', 'number', 'bigint', or an enum type.
+```
+`new Promise` 에 `<T>` type을 전달하지 않으면 default 로 `{}` 가 전달되고, 에러가 발생한다. 에러를 수정하기 위해 `<number>` 를 전달했다.
+
+### Generic Type Alias
+
+```ts
+// generic type in a type alias: right after the type alias’s name, before its assignment (=).
+type MyEvent<T> = {
+  target: T
+  type: string
+} 
+
+// you have to explicitly bind its type parameters when you use the type; they won’t be inferred for you: 
+let myEvent: MyEvent<HTMLButtonElement | null> = {
+  target: document.querySelector('#myButton'),
+  type: 'click'
+} 
+
+type TimedEvent<T> = {
+  event: MyEvent<T>
+  from: Date
+  to: Date
+} 
+```
+
+function signature 일 때 typescirpt 의 동작 방식을 살펴볼 필요가 있다.
+```ts
+// generic type alias in a function’s signature
+function triggerEvent<T>(event: MyEvent<T>): void {
+  // ...
+}
+
+triggerEvent({ // T is Element | null
+  target: document.querySelector('#myButton'),
+  type: 'mouseover'
+})
+```
+타입스크립트는 
+- function signature 에 따라 triggerEvent 에 전달한 argument 는 `MyEvent<T>` 타입이어야 하는 것을 안다. 
+- 또한 우리가 사전 정의한 `MyEvent<T>` 는 `{target: T, type: string}` 라는 것을 안다.
+- 우리가 argument 로 전달한 객체의 target field 가 `document.querySelector('#myButton')` 라는 것을 알고, 그래서 `<T>` 은 `Element | null` 라는 것을 안다. 
+- 그래서 모든 `<T>` 를 `Element | null` 로 대체한다. 
+- 타입스크립트는 그 이후 모든 타입이 할당 가능성(assignability)을 충족하는지 체크한다. 
+    
+그렇게 타입 체크가 끝난다. 
+
+### Bounded Polymorphism
+`<T>` 타입을 그냥 T 타입 이라고 하지 못하고, 최소한 `<T>` 타입의 형태를 확장한 `<U>` 타입이라고 해야하는 경우가 있다. 도대체 무슨 말인가? 아래 binary Tree  예제에서 mapNode를 함수를 선언하는 경우를 살펴보자. 
+
+#### binary tree 란 ?
+- binary tree는 데이터 구조의 한 종류이다.
+- binary tree는 node 들로 구성되어 있다. 
+- node는 value filed 와 최대 2개 까지의 child node 에 대한 레퍼런스를 가지고 있다. 
+- node는 2가지 type 중 하나로 결정되는데, 2가티 type은 leaf node(child node가 없음), inner node(child node가 있음) 이다. 
+
+이를 코드로 표현하면 다음과 같다.
+
+```ts
+type TreeNode = {
+  value: string
+}
+type LeafNode = TreeNode & {
+  isLeaf: true
+}
+type InnerNode = TreeNode & {
+  children: [TreeNode] | [TreeNode, TreeNode]
+}
+```
+
+이제 mapNode 함수를 다뤄보자. mapNode 함수는 TreeNode 를 받아서 뭔가 변경을 한뒤에 다시 TreeNode 를 반환하는 함수이다.
+```ts
+let a: TreeNode = {value: 'a'}
+let b: LeafNode = {value: 'b', isLeaf: true}
+let c: InnerNode = {value: 'c', children: [b]}
+
+let a1 = mapNode(a, _ => _.toUpperCase()) // TreeNode
+let b1 = mapNode(b, _ => _.toUpperCase()) // LeafNode
+let c1 = mapNode(c, _ => _.toUpperCase()) // InnerNode
+```
+mapNode 함수는 LeafNode 를 받으면 LeafNode를 리턴해야 하고, InnerNode를 받으면 InnerNode를 반환해야 한다. TreeNode 를 받으면 TreeNode 를 리턴해야 한다. 
+
+어떻게 TreeNode 의 SubType 을 받아 같은 SubType을 리턴하는 함수를 만들 수 있을까? 
+
+```ts
+function mapNode<T extends TreeNode>( 
+  node: T, 
+  f: (value: string) => string
+): T { 
+  return {
+    ...node,
+    value: f(node.value)
+  }
+}
+```
+`<T>` 는 `Upper Bound of TreeNode` 를 가지는데, 이렇게 함으로써 return 할 때 `f()` 호출시에 `node.value` 처럼 value 값에 안전하게 접근할 수 있다.upper bound가 없으면 `<T>` 는 `number` type 이 될수도 있다. 그러나 value field에 접근하려면 T generic 은 최소 TreeNode 의 subType이어야 한다. 바로거 이것이 Bounded Polymorphism 이며, 최소한 `T` type 인 `U` 타입의 의미이다. 
+
+혹자는 `mapNode` 를 `(node: TreeNode, f: (value: string) => string) => TreeNode,` 형식으로 정의할 수 있지 않을까 생각하지만, mapping 이후 a1, b1, c1의  결과 type은 모두 TreeNode 이며 우리는 더 자세한 정보(LeafNode, InnerNode)를 알 수 없다. 
+결국 upper bound(`T extends TreeNode`) 를 하게 되면 우리는 보다 세부적인 Type 정보에 대해 알 수 있다.
+
+#### Bounded polymorphism with multiple constraints
+
+위에서는 하나의 type 제약을 가진 상황을 봣는데, 여러개의 제약조건을 가지는 상황이 있을 수 있고, 아래와 같이 표현할 수 있다. 
+```ts
+type HasSides = {numberOfSides: number}
+type SidesHaveLength = {sideLength: number}
+
+function logPerimeter< 
+  Shape extends HasSides & SidesHaveLength 
+>(s: Shape): Shape { 
+  console.log(s.numberOfSides * s.sideLength)
+  return s
+}
+
+type Square = HasSides & SidesHaveLength
+let square: Square = {numberOfSides: 4, sideLength: 3}
+logPerimeter(square) // Square, logs "12"
+```
+
+#### Using bounded polymorphism to model arity
+> ##### arity 
+> meaning: (logic, mathematics, computer science) The number of arguments or operands a function or operation takes. For a relation, the number of domains in the corresponding Cartesian product.
+argument 가 몇개 들어올지 예상하지 못하는 때에도 bounded polymorphism 이 쓰일 수 있다. 
+```ts
+function call(
+  f: (...args: unknown[]) => unknown,
+  ...args: unknown[]
+): unknown {
+  return f(...args)
+}
+
+function fill(length: number, value: string): string[] {
+  return Array.from({length}, () => value)
+}
+
+call(fill, 10, 'a') // evaluates to an array of 10 'a's
+```
