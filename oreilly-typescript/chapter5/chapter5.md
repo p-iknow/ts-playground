@@ -277,9 +277,9 @@ interface User<Age extends string> {
 }
 ```
 
-### Implementation
+#### Implementation
 
-다른 타입 annotation 처럼, type-level 의 제약을 거는 편리한 방법이다. implement 오류는 런타임에서 파악하기 어렵다. implement 키워드를 적용하면 컴파일 시에 implement 가 잘못된 경우 에러를 띄워, 나중에 런타임에서 implement를 잘못해서 발생할 수 있는 오류를 사전에 차단한다.
+다른 타입 annotation 처럼, type-level 의 제약을 거는 편리한 방법이다. implement 오류는 런타임에서 파악하기 어렵다. implement 키워드를 적용하면 컴파일 시에 implement 가 잘못된 경우 에러를 띄워, 나중에 런타임에서 implement를 잘못해서 발생할 수 있는 오류를 사전에 차단한다. 또한 adapters, factories, and strategies 패턴을 적용할 때 쓰인다.
 
 ```ts
 interface Animal {
@@ -295,4 +295,99 @@ class Cat implements Animal {
     console.info('Slept for', hours, 'hours');
   }
 }
+```
+위에서 Cat class 는 interface 에서 선언한 eat, sleep method를 모두 구현해야 한다. 또한 인터페이스에 없는 추가적인 메소드를 eat, sleep 위에 먼저 추가할 수 있다. 
+
+interface 는 instance property 를 선언할 수 있지만, public, protected, private 등의 접근 제어자와 static 키워드를 쓸 수없다. 다만 read-only만 가능할 뿐이다.(chpater 3 object 처럼 이라는 수식이 붙었는데 무슨 말인지 모르겠음)
+```ts
+interface Animal {
+  readonly name: string
+  eat(food: string): void
+  sleep(hours: number): void
+}
+```
+implement 할 때 여러개의 interface를 적용할 수도 있다. 
+```ts
+iinterface Animal {
+  readonly name: string
+  eat(food: string): void
+  sleep(hours: number): void
+}
+
+interface Feline {
+  meow(): void
+}
+
+class Cat implements Animal, Feline {
+  name = 'Whiskers'
+  eat(food: string) {
+    console.info('Ate some', food, '. Mmm!')
+  }
+  sleep(hours: number) {
+    console.info('Slept for', hours, 'hours')
+  }
+  meow() {
+    console.info('Meow')
+  }
+}
+```
+
+
+#### Implementing Interfaces Versus Extending Abstract Classes
+##### `interface` 
+- 보다 보편적이고 가볍다
+- An interface is a way to model a shape. At the value level, that means an object, array, function, class, or class instance. ? 여기서 then === shape 이고, shpe로 표현할 수 있는 항목을 열거하고 있는 의미로 유추됨 
+- interface 는 compile time 에만 존재하며 어떤 자바스크립트 코드도 생산하지 않는다. 
+ 
+##### `abstract` : 
+- 특정한 목적이 있고, feature-rich(기능이 풍부?) 하다.
+- An abstract class can only model class 
+- compile 이후 jvascript class 로 변환된다. 
+- constructors, provide default implementations 을 활용할 수 있다.
+- property 혹은 method 에 access modifier(접근 제어자)를 쓸 수 있다.
+- interface는 위 열거된 항목을 적용할 수 없다. 
+
+Which one you use depends on your use case. When an implementation is shared among multiple classes, use an abstract class. When you need a lightweight way to say “this class is a T,” use an interface.
+
+### Classes Are Structurally Typed (구조 타이핑)
+이름(nominal) 이 아니라 구조만 같으면 동일하게 간주한다. 
+```ts
+class Zebra {
+  trot() {
+    // ...
+  }
+}
+
+class Poodle {
+  trot() {
+    // ...
+  }
+}
+
+function ambleAround(animal: Zebra) {
+  animal.trot()
+}
+
+let zebra = new Zebra
+let poodle = new Poodle
+
+ambleAround(zebra)   // OK
+ambleAround(poodle)  // OK
+```
+Java, C++, 에서 `ambleAround(poodle)`은 에러가 났을 것이다. 이름이 다르기 때문이다. 
+
+여기에도 예외가 있는데, field가 private, protected 를 썼을 때 이다. 이런 경우엔 아무리 구조가 같떠라도 A의 instance 이거나, Subclass(B) 가 아닌 경우에는 f 함수에 인자로 할당할 수 없다. 
+```ts
+class A {
+  private x = 1
+}
+class B extends A {}
+function f(a: A) {}
+
+f(new A)   // OK
+f(new B)   // OK
+
+f({x: 1})  // Error TS2345: Argument of type '{x: number}' is not
+           // assignable to parameter of type 'A'. Property 'x' is
+           // private in type 'A' but not in type '{x: number}'.
 ```
