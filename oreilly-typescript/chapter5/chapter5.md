@@ -59,7 +59,8 @@ Cherny, Boris. Programming TypeScript . O'Reilly Media. Kindle Edition.
 let set = new Set
 set.add(1).add(2).add(3)
 set.has(2) // true
-set.has(4) // false Let’s define the Set class, starting with the has method: class Set {
+set.has(4) // false Let’s define the Set class, starting with the has method: 
+class Set {
   has(value: number): boolean {
     // ...
   }
@@ -390,4 +391,203 @@ f(new B)   // OK
 f({x: 1})  // Error TS2345: Argument of type '{x: number}' is not
            // assignable to parameter of type 'A'. Property 'x' is
            // private in type 'A' but not in type '{x: number}'.
+```
+### Classes Declare Both Values and Types
+타입스크립트에서 표현할 수 있는 것은 `type` or `value` 이다. 
+```ts
+// values
+let a = 1999
+function b() {}
+
+// types
+type a = number
+interface b {
+  (): void
+}
+```
+Types and values are namespaced separately in TypeScript. Depending on how you use a term (a or b in this example), TypeScript knows whether to resolve it to a type or to a value:
+
+
+```ts
+// ...
+if (a + 1 > 3) //... // TypeScript infers from context that you mean the value a
+let x: a = 3         // TypeScript infers from context that you mean the type a
+```
+이렇게 상황에 따라 결정되는 것을 `contextual term resolution` 이라 한다.
+
+class와 enum의 경우 독특한 특징을 가지는데 이 값들은 type인 동시에 value 이다. 
+```ts
+class C {}
+let c: C  //type
+  = new C  // value
+
+enum E {F, G}
+let e: E  //type 
+  = E.F  // value
+```
+
+#### 클래스 선언이 type level에서 생성하는 것들
+```ts
+type State = {
+  [key: string]: string
+}
+
+class StringDatabase {
+  state: State = {}
+  get(key: string): string | null {
+    return key in this.state ? this.state[key] : null
+  }
+  set(key: string, value: string): void {
+    this.state[key] = value
+  }
+  static from(state: State) {
+    let db = new StringDatabase
+    for (let key in state) {
+      db.set(key, state[key])
+    }
+    return db
+  }
+} 
+// What types does this class declaration generate? The instance type StringDatabase: interface 
+
+StringDatabase {
+  state: State
+  get(key: string): string | null
+  set(key: string, value: string): void
+} 
+
+//And the constructor type typeof StringDatabase: interface 
+
+StringDatabaseConstructor {
+  new(): StringDatabase
+  from(state: State): StringDatabase
+}
+// arguments 를 추가하는 예제 
+
+class StringDatabase {
+  constructor(public state: State = {}) {}
+  // ...
+} 
+// We could then type StringDatabase’s constructor signature as: 
+interface StringDatabaseConstructor {
+  new(state?: State): StringDatabase
+  from(state: State): StringDatabase
+}
+
+```
+So, not only does a class declaration generate terms at the value and type levels, but **it generates two terms at the type level: one representing an instance of the class; one representing the class constructor itself (reachable with the typeof type operator).**
+
+### Polymorphism
+
+```ts
+class MyMap<K, V> { 
+  constructor(initialKey: K, initialValue: V) { 
+    // ...
+  }
+  get(key: K): V { 
+    // ...
+  }
+  set(key: K, value: V): void {
+    // ...
+  }
+  // instance method 에서 새로운 generic 을 쓸 수도 있다.
+  merge<K1, V1>(map: MyMap<K1, V1>): MyMap<K | K1, V | V1> { 
+    // ...
+  }
+  // static method 에서는 class 형의 generic 에 접근하지 못한다. (value level 에서 instance variable에 접근하지 못하는 것처럼) 따라서 static class level 의  generic을 만들어야 한다.
+  static of<K, V>(k: K, v: V): MyMap<K, V> { 
+    // ...
+  }
+}
+
+
+let a = new MyMap<string, number>('k', 1) // MyMap<string, number>
+//  generic 도 아래 처럼 추론이 가능함
+let b = new MyMap('k', true) // MyMap<string, boolean>
+
+a.get('k')
+b.set('k', false)
+```
+### Mixin
+자바스크립트와 타입스크립트에는 명시적으로 mixin, trait 을 지원하는 기능은 없지만, 다중상속으로 이를 가능하게 한다. 
+JavaScript and TypeScript don’t have trait or mixin keywords, but it’s straightforward to implement them ourselves. 
+
+**Both are ways to simulate multiple inheritance (classes that extend more than one other class) and do role-oriented programming,** a style of programming where you don’t say things like “this thing is a Shape" but instead describe properties of a thing, like “it can be measured” or “it has four sides.” Instead of “is-a” relationships, **you describe “can” and “has-a” relationships.**
+
+Mixins are a pattern that allows us to mix behaviors and properties into a class. By convention, mixins: 
+- Can have state (i.e., instance properties)  
+- Can only provide concrete methods (not abstract ones)  
+- Can have constructors, which are called in the same order as their classes were mixed in
+
+#### EZdebug example with  mixin pattern
+
+```ts
+// 우리으 EZ.debug는 아래와 같이 사용될 것이다.
+class User {
+  // ...
+}
+
+User.debug() // evaluates to 'User({"id": 3, "name": "Emma Gluzman"})'
+
+
+// 이제 모델링을 해보자 
+type ClassConstructor = new(...args: any[]) => {} 
+
+// withEZDebug 의 return type 을 infer 하도록 했는데 추론된 결과는 C generic과 함수연산의  결과물의 intersection 일 것이다. 
+function withEZDebug<C extends ClassConstructor>(Class: C) { 
+  // mixin 은 constructor 를 인자로 받아 constructor 를 retrun 하는 함수 이기 때문에 anonymous class 를 return 했다. 
+  return class extends Class { 
+  // 4. return 되는 class 는 mixin 함수가 인자로 받은 class constructor 가 받을 수 있는 인자를 모두 동일하게 받을 수 있어야 한다. 그런데 우리가 받을 클래스가 어떤 클래스일지 알 수 없기 때문에 여기에 generic 을 쓰는 것이다. 
+    constructor(...args: any[]) { 
+  // 5. 우리가 return 하는 anonymous class 는 다른 class 를 extends 하기 때문에 올바르게 쓰려면 상속받은 Class의 constructor 도 실행시켜야 한다. 
+      super(...args) 
+    }
+  }
+}
+```
+추가로 constructor 에 별도 logic 이 없다면 이를 생략해도 되고, 그러면 위에서 주석으로 언급한 4,5 번 내용도 생략할 수 있다. 우리도 EZdebug 의 constructor 에서 별도 로직을 넣지 않을 예정이기 때문에 우리의 코드에서도 super 를 생략하자. 
+```ts
+type ClassConstructor = new(...args: any[]) => {}
+
+function withEZDebug<C extends ClassConstructor>(Class: C) {
+  return class extends Class {
+    debug() {
+      let Name = Class.constructor.name
+      let value = this.getDebugValue()
+      return Name + '(' + JSON.stringify(value) + ')'
+    }
+  }
+}
+```
+그런데 잠깐, return 된 class 에서 어떻게 `this.getDebugValue()` 를 호출할 수 있을까? 어디에도 그런 정보가 없다. 때문에 우리의 코드를 아래와 처럼 바꿔야 한다. 
+```ts
+// generic 을 추가했다. 
+type ClassConstructor<T> = new(...args: any[]) => T 
+
+function withEZDebug<C extends ClassConstructor<{
+  // generic에 object literal 형의 type 을 인자로 전달했다. 이로써 getDebugValue 가 있다는 것을 보증할 수 있다. 
+  getDebugValue(): object 
+}>>(Class: C) {
+  // ...
+}
+```
+자 이제 어떻게 이를 활용하는지 살펴보자.
+```ts
+class HardToDebugUser {
+  constructor(
+    private id: number,
+    private firstName: string,
+    private lastName: string
+  ) {}
+  getDebugValue() {
+    return {
+      id: this.id,
+      name: this.firstName + ' ' + this.lastName
+    }
+  }
+}
+
+let User = withEZDebug(HardToDebugUser)
+let user = new User(3, 'Emma', 'Gluzman')
+user.debug() // evaluates to 'User({"id": 3, "name": "Emma Gluzman"})'
 ```
