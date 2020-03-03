@@ -5,7 +5,9 @@
     "outDir": "dist",
     "sourceMap": true,
     "strict": true,
-    "target": "es2015"
+    "target": "es2015",
+    "experimentalDecorators": true
   },
   "include": ["src"]
+  
 }

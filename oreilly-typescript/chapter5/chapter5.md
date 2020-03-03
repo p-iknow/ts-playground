@@ -21,8 +21,6 @@ class Piece {
     this.position = new Position(file, rank)
   }
 }
-
-Cherny, Boris. Programming TypeScript . O'Reilly Media. Kindle Edition.
 ```
 
 #### private
@@ -591,3 +589,223 @@ let User = withEZDebug(HardToDebugUser)
 let user = new User(3, 'Emma', 'Gluzman')
 user.debug() // evaluates to 'User({"id": 3, "name": "Emma Gluzman"})'
 ```
+### Decorator
+
+experimental TypeScript feature that gives us a clean syntax for metaprogramming with classes, class methods, properties, and method parameters.
+They’re just a syntax for calling a function on the thing you’re decorating.
+> [메타프로그레밍이란](http://channy.creation.net/project/dev.kthcorp.com/2012/02/16/javascript-meta-programming/index.html) 
+
+데코레이터 패턴은 아직 experimental 기능이기 때문에 tsconfig.json에서 별도 설정을 해야 사용할 수 있다. 
+```json
+{"experimentalDecorators": true}
+```
+#### decorator example
+```ts
+@serializable
+class APIPayload {
+  getValue(): Payload {
+    // ...
+  }
+}
+
+// 위 코드는 아래와 같다. 
+let APIPayload = serializable(class APIPayload {
+  getValue(): Payload {
+    // ...
+  }
+})
+
+```
+For each type of decorator, TypeScript requires that you have a function in scope with the given name and the required signature for that type of decorator (see Table 5-1).
+
+![decorator](https://imgur.com/O5X3Mqi.png)
+
+위에서 논의됬던 serializable 을 구체화 시키면 아래와 같다. 
+```ts
+type ClassConstructor<T> = new(...args: any[]) => T  // 1
+
+function serializable<
+  T extends ClassConstructor<{
+    getValue(): Payload 
+  }>
+>(Constructor: T) { 
+  return class extends Constructor { 
+    serialize() {
+      return this.getValue().toString()
+    }
+  }
+}
+```
+1 &rarr; `new()` 는 class 의 constructor의 type을 정의하는 방법이다. 
+
+#### 데코레이터 쓸때 유의할점
+```ts
+type ClassConstructor<T> = new(...args: any[]) => T  // 1
+
+function serializable<
+  T extends ClassConstructor<{
+    getValue(): Payload 
+  }>
+>(Constructor: T) { 
+  return class extends Constructor { 
+    serialize() {
+      return this.getValue().toString()
+    }
+  }
+}
+
+@serializable
+class APIPayload {
+  getValue(): Payload {
+    // ...
+  }
+}
+
+
+let payload = new APIPayload
+let serialized = payload.serialize() // Error TS2339: Property 'serialize' does
+                                     // not exist on type 'APIPayload'.
+```
+
+타입스크립트가 decorator를 정식기능으로 지원하기 전에는 아래와 같은 방식으로 decorator를 대신하라
+```ts
+let DecoratedAPIPayload = serializable(APIPayload)
+let payload = new DecoratedAPIPayload
+payload.serialize()                  // string
+```
+
+### Simulating final Classes
+타입스크립트에서는 `final` 키워드가 별도 없다. `final` 은  보통 oop 언어에서 더이상 method가 overrided 되지 않고, class 는 extend 되지 않게 강제하는 키워드 이다. 타입스크립트에서는 `final` 키워드가 없지만 이를 쉽게 simulating 할 수 있다. 
+
+여기에 우리는 `private constructor` 를 사용할 수  있다.
+```ts
+class MessageQueue {
+  private constructor(private messages: string[]) {}
+}
+```
+`private constructor`를 활용하면 extend 를 할 수 없고, new 키워드를 쓸 수도 없다. 
+```ts
+class BadQueue extends MessageQueue {}  // Error TS2675: Cannot extend a class
+                                        // 'MessageQueue'. Class constructor is
+                                        // marked as private.
+
+new MessageQueue([])                    // Error TS2673: Constructor of class
+                                        // 'MessageQueue' is private and only
+                                        // accessible within the class
+                                        // declaration.
+
+```
+그러나 우리가 원하는 것은 extend를 못하게 하는 것이지 new 키워들 못쓰게 하는 것은 아니다. 그럼 어떻게 extend 만 하는 것을 막을 수 있을까?
+
+```ts
+class MessageQueue {
+  private constructor(private messages: string[]) {}
+  static create(messages: string[]) {
+    return new MessageQueue(messages)
+  }
+}
+
+```
+
+static 메소드를 활용해 이를 해결할 수 있다. new 대신에 static 메소드를 활용해 instantiate 할 수 있다. 
+
+```ts
+class BadQueue extends MessageQueue {}  // Error TS2675: Cannot extend a class
+                                        // 'MessageQueue'. Class constructor is
+                                        // marked as private.
+
+MessageQueue.create([]) // MessageQueue
+```
+### Design Pattern 
+#### Factory pattern
+```ts
+// 기존
+type Shoe = {
+  purpose: string
+}
+
+class BalletFlat implements Shoe {
+  purpose = 'dancing'
+}
+
+class Boot implements Shoe {
+  purpose = 'woodcutting'
+}
+
+class Sneaker implements Shoe {
+  purpose = 'walking'
+}
+
+// factory pattern
+let Shoe = {
+  create(type: 'balletFlat' | 'boot' | 'sneaker'): Shoe { 
+    switch (type) { 
+      case 'balletFlat': return new BalletFlat
+      case 'boot': return new Boot
+      case 'sneaker': return new Sneaker
+    }
+  }
+}
+
+Shoe.create('boot') // Shoe
+
+```
+In this example we use the `companion object pattern` (see “Companion Object Pattern”) to declare a type Shoe and a value Shoe with the same name (remember that TypeScript has separate namespaces for values and for types), as a way to signal that the value provides methods for operating on the type.
+
+#### Builder Pattern
+The builder pattern is a way to separate the construction of an object from the way that object is actually implemented.
+
+jquery, es6의 set, map 을 썻다면 아래 방식에 익숙할 것임
+```ts
+new RequestBuilder()
+  .setURL('/users')
+  .setMethod('get')
+  .setData({firstName: 'Anna'})
+  .send()
+```
+How do we implement RequestBuilder?
+
+```ts
+class RequestBuilder {}
+
+//First we’ll add the .setURL method:
+class RequestBuilder {
+
+  private url: string | null = null 
+
+  setURL(url: string): this { 
+    this.url = url
+    return this
+  }
+}
+
+// Now let’s add the other methods from our example:
+
+
+class RequestBuilder {
+
+  private data: object | null = null
+  private method: 'get' | 'post' | null = null
+  private url: string | null = null
+
+  setMethod(method: 'get' | 'post'): this {
+    this.method = method
+    return this
+  }
+  setData(data: object): this {
+    this.data = data
+    return this
+  }
+  setURL(url: string): this {
+    this.url = url
+    return this
+  }
+
+  send() {
+    // ...
+  }
+}
+```
+
+
+
