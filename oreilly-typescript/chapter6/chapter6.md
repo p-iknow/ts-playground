@@ -333,9 +333,101 @@ let e = [1, {x: 2}] as const  // readonly [1, {readonly x: 2}]
 **type script 가 가장 narrowly 하게 추론하고자 할 때 as const 키워드를 사용하라** 
 
 #### Excess property checking
+type widening 은 한 객체의 타입이 다른 객체의 타입에 할당 가능한지 여부를 확인할 때도 쓰인다. "Shape and Array variance" 파트에서 다뤘던 내용을 상기해보면, object type은 covariant 이다. 그러나 typescript 가 별도의 추가적인 check 를 하지 않고 이 규칙을 고수하면 문제가 될 경우가 많다. 
 
+클래스를 configure 하기 위해 전달하는 Option object 에 대해 생각해보자. 
+```ts
+type Options = {
+  baseURL: string
+  cacheSize?: number
+  tier?: 'prod' | 'dev'
+}
 
- 
+class API {
+  constructor(private options: Options) {}
+}
+
+new API({
+  baseURL: 'https://api.mysite.com',
+  tier: 'prod'
+})
+
+```
+이제 option 객체를 전달하는 과정에서 typo 가 발생하면 어떤일이 발생할까? 
+```ts
+new API({
+  baseURL: 'https://api.mysite.com',
+  tierr: 'prod'      // Error TS2345: Argument of type '{tierr: string}'
+})                   // is not assignable to parameter of type 'Options'.
+                     // Object literal may only specify known properties,
+                     // but 'tierr' does not exist in type 'Options'.
+                     // Did you mean to write 'tier'?
+```
+오류가 발생한다. 자바스크립트로 작업을 할 때 이 오류는 빈번하고, 타입스크립트가 이런 부분에서 큰 도움을 준다. 그러나 object type is covariant in their member 라면 타입스크립트가 어떻게 이 오류를 잡아낼 수 있을까?
+
+```ts
+// 기대되는 type
+type {baseURL: string, cacheSize?: number, tier?: 'prod' | 'dev'}
+
+// 실제 전달하는 type 
+type {baseURL: string, tierr: string}.
+```
+우리가 실제 전달하는 타입은 기대되는 타입의 subtype 이기 때문에 오류가 발생하지 않아야 하는데 typescript 는 어떻게 오류를 잡아낼까? 
+
+바로 excess property checking 때문이다. excess preoperty checking 의 작동방식에 대해 논하려면 우선 fresh object literal type 에 대해 먼저 알아야 한다.
+
+#### fresh object literal type
+object literal 로 부터 infer 되는 type이라고 정의한다. 만약 object literal 이 type assertion 을 사용했거나, variable 에 할당된 경우라면 fresh object literal type은 일반 객체 타입으로 widending 된다. 
+
+이제 excess preoperty checking 의 동작방식에 대해 알아보자. 만약 fresh object literal type 인 T 를 다른 Type U 에 할당하려고 할 때, T 의 preoperty 중 U가 가지고 있지 않은 preoperty 가 있다면 typescript는 error 를 뿜는다. 이제 예제를 살펴보자.
+
+아래와 같은 상황을 가정하자.
+```ts
+type Options = {
+  baseURL: string
+  cacheSize?: number
+  tier?: 'prod' | 'dev'
+}
+
+class API {
+  constructor(private options: Options) {}
+}
+```
+
+```ts
+// 문제 없이 작동하는 것이 예상된다. 
+new API({ 
+  baseURL: 'https://api.mysite.com',
+  tier: 'prod'
+})
+
+// 전달하는 object 는 fresh object literal 이므로 excess preperty checking 이 발생하고 에러가 난다. 
+new API({ 
+  baseURL: 'https://api.mysite.com',
+  badTier: 'prod'    // Error TS2345: Argument of type '{baseURL: string; badTier:
+})                   // string}' is not assignable to parameter of type 'Options'.
+
+// 전달하는 object literal 이 tpye assertion 을 사용했고 type widening 이 발생해 더 더 이상 fresh objecter literal 이 아니고 excess preoperty checking 이 발생하지 않아 오류가 나지 않는다.
+new API({ 
+  baseURL: 'https://api.mysite.com',
+  badTier: 'prod'
+} as Options)
+
+// 전달하는 object literal 이 variable 에  할당됬고 type widening 이 발생해 더 더 이상 fresh objecter literal 이 아니고 excess preoperty checking 이 발생하지 않아 오류가 나지 않는다.
+let badOptions = { 
+  baseURL: 'https://api.mysite.com',
+  badTier: 'prod'
+}
+new API(badOptions)
+
+// 전달하는 object 는 fresh object literal 이므로 excess preperty checking 이 발생하고 에러가 난다. 다만 여기서 API에 인자로 전달할 때 에러가 나는 것이 아니라, varialbe 할당 과정에서 에러가 나는 것임을 명심하자.
+let options: Options = { 
+  baseURL: 'https://api.mysite.com',
+  badTier: 'prod'    // Error TS2322: Type '{baseURL: string; badTier: string}'
+}                    // is not assignable to type 'Options'.
+new API(options)
+
+```
 
 ## Totality
 
