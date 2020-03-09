@@ -429,8 +429,170 @@ new API(options)
 
 ```
 
+### Refinement
+
+TypeScript performs **flow-based type inference**, which is a kind of symbolic execution where the typechecker uses control flow statements like if, ?, ||, and switch, as well as type queries like typeof, instanceof, and in, to refine types as it goes, just like a programmer reading through the code would.
+
+1. It’s an incredibly convenient feature for a typechecker to have, but is another one of those things that remarkably few languages support.
+
+2. Let’s walk through an example. Say we’ve built an API for defining CSS rules in TypeScript, and a coworker wants to use it to set an HTML element’s width. They pass in the width, which we then want to parse and validate.
+
+```ts
+// We use a union of string literals to describe
+// the possible values a CSS unit can have
+type Unit = 'cm' | 'px' | '%'
+
+// Enumerate the units
+let units: Unit[] = ['cm', 'px', '%']
+
+// Check each unit, and return null if there is no match
+function parseUnit(value: string): Unit | null {
+  for (let i = 0; i < units.length; i++) {
+    if (value.endsWith(units[i])) {
+      return units[i]
+    }
+  }
+  return null
+}
+
+
+type Width = {
+  unit: Unit,
+  value: number
+}
+// 
+
+function parseWidth(width: number | string | null | undefined): Width | null {
+  // If width is null or undefined, return early
+  // We say that the type was refined from `number | string | null | undefined` to `number | string`.
+
+  if (width == null) { 
+    return null
+  }
+
+  // If width is a number, default to pixels
+  if (typeof width === 'number') { 
+    // width : number 
+    return {unit: 'px', value: width} 
+  }
+
+
+  //  width : string 
+  // Try to parse a unit from width
+  let unit = parseUnit(width)
+  if (unit) { 
+    return {unit, value: parseFloat(width)}
+  }
+
+  // Otherwise, return null
+  // falsy, meaning it must be of type null refined from `Unit | null`.
+  return null 
+}
+```
+#### Discriminated union types
+```ts
+type UserTextEvent = {value: string}
+type UserMouseEvent = {value: [number, number]}
+
+type UserEvent = UserTextEvent | UserMouseEvent
+
+function handle(event: UserEvent) {
+  if (typeof event.value === 'string') {
+    event.value  // string
+    // ...
+    return
+  }
+  event.value    // [number, number]
+}
+```
+
+```ts
+type UserTextEvent = {
+  value: string, 
+  target: HTMLInputElement
+}
+
+type UserMouseEvent = {
+  value: [number, number], 
+  target: HTMLElement
+}
+
+type UserEvent = UserTextEvent | UserMouseEvent
+
+function handle(event: UserEvent) {
+  if (typeof event.value === 'string') {
+    event.value  // string
+    event.target // HTMLInputElement | HTMLElement (!!!)
+    // ...
+    return
+  }
+  event.value    // [number, number]
+  event.target   // HTMLInputElement | HTMLElement (!!!)
+}
+```
+`event.value` 에 대해서는 refinement 가 작동했으나 `event.target` 에는 적용되지 않았다. 왜 그런가? `handle` 함수가 `UserEvent` 를 인자로 받을 때, 이게 의미하는 바가  `UserTextEvent` or `UserMouseEvent` 를 인자를 받을 수 있다는 의미는 아니다. 사실 union type 인 UserMouseEvent | UserTextEvent 은 `UserTextEvent` or `UserMouseEvent` 과는 의미가 다르다. 무슨 말이냐 하면 우리가 설정한  union type 이  overlap 될 수도 있기 때문이다. 
+
+TypeScript needs a more reliable way to know when we’re in one case of a union type versus another case. 
+
+The way to do this is to use a literal type to tag each case of your union type. A good tag is:
+
+ - On the same place in each case of your union type. That means the same object field if it’s a union of object types, or the same index if it’s a union of tuple types. In practice, tagged unions usually use object types.  
+ - Typed as a literal type (a literal string, number, boolean, etc.). You can mix and match different types of literals, but it’s good practice to stick to a single type; typically, that’s a string literal type.  
+ - Not generic. Tags should not take any generic type arguments.  
+ - Mutually exclusive (i.e., unique within the union type).
+
+With that in mind, let’s update our event types again:
+
+```ts
+type UserTextEvent = {
+  type: 'TextEvent', 
+  value: string, 
+  target: HTMLInputElement
+}
+
+type UserMouseEvent = {
+  type: 'MouseEvent', 
+  value: [number, number],
+  target: HTMLElement
+}
+
+type UserEvent = UserTextEvent | UserMouseEvent
+
+function handle(event: UserEvent) {
+  if (event.type === 'TextEvent') {
+    event.value  // string
+    event.target // HTMLInputElement
+    // ...
+    return
+  }
+  event.value    // [number, number]
+  event.target   // HTMLElement
+}
+```
+Now when we refine event based on the value of its tagged field (event.type), TypeScript knows that in the if branch event has to be a UserTextEvent, and after the if branch it has to be a UserMouseEvent. Since the tag is unique per union type, TypeScript knows that the two are mutually exclusive.
+
+**Use tagged unions when writing a function that has to handle the different cases of a union type. For example, they’re invaluable when working with Flux actions, Redux reducers, or React’s useReducer.**
+
 ## Totality
 
+Totality, also called exhaustiveness checking, is what allows the typechecker to make sure you’ve covered all your cases.
+
+타입스크립트는 모든 경우의 수를 검토하여, 오류가 있을 경우 경고를 해준다. 예를들면 다음과 같다. 
+
+```ts
+type Weekday = 'Mon' | 'Tue'| 'Wed' | 'Thu' | 'Fri'
+type Day = Weekday | 'Sat' | 'Sun'
+
+function getNextDay(w: Weekday): Day {
+  switch (w) {
+    case 'Mon': return 'Tue'
+  }
+} 
+// Error TS2366: Function lacks ending return statement and
+// return type does not include 'undefined'.
+
+```
+We clearly missed a few days (it’s been a long week). TypeScript comes to the rescue
 ## Advanced Object Types
 ## Advanced Function Types
 ## Conditonal Types
