@@ -579,6 +579,8 @@ Totality, also called exhaustiveness checking, is what allows the typechecker to
 
 타입스크립트는 모든 경우의 수를 검토하여, 오류가 있을 경우 경고를 해준다. 예를들면 다음과 같다. 
 
+We clearly missed a few days (it’s been a long week). TypeScript comes to the rescue:
+
 ```ts
 type Weekday = 'Mon' | 'Tue'| 'Wed' | 'Thu' | 'Fri'
 type Day = Weekday | 'Sat' | 'Sun'
@@ -592,7 +594,20 @@ function getNextDay(w: Weekday): Day {
 // return type does not include 'undefined'.
 
 ```
-We clearly missed a few days (it’s been a long week). TypeScript comes to the rescue
+아래와 같은 경우가 있어도 마찬가지다. no matter what kind of control structure you use — switch, if, throw, and so on — TypeScript will watch your back to make sure you have every case covered.
+
+
+```ts
+function isBig(n: number) {
+  if (n >= 100) {
+    return true
+  }
+}
+// Error TS7030: Not all code paths return a value.
+```
+
+사실 우리가 선언한 변수에 접근할 때 typescript 가 우리가 놓친 부분을 찾아 오류를 뱉어주길 기대할 수도 있지만, 그보다 미리 안전하게 타입을 정의하는 방법도 있다. “The Record Type”, “Mapped Types”이 그것인데 그전에 object types 에 적용할 수 있는 type operators 를 먼저 살펴보고 가자.
+
 ## Advanced Object Types
 ## Advanced Function Types
 ## Conditonal Types
