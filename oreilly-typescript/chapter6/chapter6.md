@@ -609,6 +609,178 @@ function isBig(n: number) {
 사실 우리가 선언한 변수에 접근할 때 typescript 가 우리가 놓친 부분을 찾아 오류를 뱉어주길 기대할 수도 있지만, 그보다 미리 안전하게 타입을 정의하는 방법도 있다. “The Record Type”, “Mapped Types”이 그것인데 그전에 object types 에 적용할 수 있는 type operators 를 먼저 살펴보고 가자.
 
 ## Advanced Object Types
+
+### Type Operators for Object Types
+intersection(&), union(|) 이외에 별도 type operator가 더 있다. 좀 더 배워보자.
+
+#### The Keying-in operator
+global social media GraphQL API 로 부터 받아야 중첩된 데이터를 model 한다고 가정해보자. 
+
+```ts
+type APIResponse = {
+  user: {
+    userId: string
+    friendList: {
+      count: number
+      friends: {
+        firstName: string
+        lastName: string
+      }[]
+    }
+  }
+}
+```
+아마 우리는 해당 API로 부터 data를 fetch 해서 render 할 것이다. 
+
+```ts
+function getAPIResponse(): Promise<APIResponse> {
+  // ...
+}
+
+// 아직 friendList의 타입을 정의하지 않음
+function renderFriendList(friendList: unknown) {
+  // ...
+}
+
+let response = await getAPIResponse()
+renderFriendList(response.user.friendList)
+```
+`friendList`의 type은 무엇이어야 할까? 전체 객체 구조에서 해당하는 부분의 객체를 다시 정의한 타입을 만들 수 있을 것이다. 
+```ts
+type FriendList = {
+  count: number
+  friends: {
+    firstName: string
+    lastName: string
+  }[]
+}
+
+type APIResponse = {
+  user: {
+    userId: string
+    friendList: FriendList
+  }
+}
+
+function renderFriendList(friendList: FriendList) {
+  // ...
+}
+
+```
+그러나 그렇게 할 필요가 없다. `key-in` opeerator를 쓰면 된다.
+
+```ts
+type APIResponse = {
+  user: {
+    userId: string
+    friendList: {
+      count: number
+      friends: {
+        firstName: string
+        lastName: string
+      }[]
+    }
+  }
+}
+
+type FriendList = APIResponse['user']['friendList']
+
+function renderFriendList(friendList: FriendList) {
+  // ...
+}
+```
+key-in operator를 어떤 shape(object, class constructor, class instance), array 에도 사용할 수 있다. 예를들면 다음과 같이 friends 에서 각 friend를 key in 할 수도 있다.
+```ts
+type Friend = FriendList['friends'][number]
+```
+`[number]` 자리에 number literal을 사용해서 array type을 key in 할 수 있다. tuple 에 key in을 사용하기 위해 number literal(0, 1)을 사용하라.
+
+key in을 사용하는 방법이 javascript에서 object를 조회할 때와 비슷한 대, key in을 사용할 때는 braket notation을 사용한다는 것을 꼭 명심하라. dot notation 은 사용하면 안된다. 
+
+#### The keyof operator
+
+keyof operator 를 사용하면 객체의 모든 key를 string literal 형태의 union type으로 얻을 수 있다.
+```ts
+type ResponseKeys = keyof APIResponse // 'user'
+type UserKeys = keyof APIResponse['user'] // 'userId' | 'friendList'
+type FriendListKeys =
+  keyof APIResponse['user']['friendList'] // 'count' | 'friends'
+```
+keying-in, keyof operator를 활용하면 주어진 key를 통해 value를 찾는 type safe 한 getter function을 만들 수 있다.
+
+```ts
+function get< 
+  O extends object,
+  K extends keyof O 
+>(
+  o: O,
+  k: K
+): O[K] { 
+  return o[k]
+}
+```
+- get is a function that takes an object o and a key k.
+
+- keyof O is a union of string literal types, representing all of o’s keys. The generic type K extends — and is a subtype of — that union. For example, if o has the type `{a: number, b: string, c: boolean}`, then keyof o is the type `'a' | 'b' | 'c'`, and K (which extends keyof o) could be the type `'a', 'b', 'a' | 'c'`, or any other subtype of keyof o.
+
+- `O[K]` is the type you get when you look up K in O. Continuing the example from , if K is 'a', then we know at compile time that get returns a number. Or, if `K` is `'b' | 'c'`, then we know get returns `string | boolean`.
+
+이런 type operator 의 장점은 shape 타입을 보다 안전하고 정확하게 표현할 수 있다는 점이다. 위애서 만든 get function을 사용해보자.
+```ts
+type ActivityLog = {
+  lastEvent: Date
+  events: {
+    id: string
+    timestamp: Date
+    type: 'Read' | 'Write'
+  }[]
+}
+
+let activityLog: ActivityLog = // ...
+let lastEvent = get(activityLog, 'lastEvent') // Date
+```
+TypeScript는 컴파일 타임에 lastEvent 유형이 Date인지 확인한다. 물론 객체를 더 깊이 입력하기 위해 이것을 확장 할 수도 있다. 최대 3 개의 키를 받도록 overload 해보자 :
+
+```ts
+type Get = { // -1
+  <
+    O extends object,
+    K1 extends keyof O
+  >(o: O, k1: K1): O[K1] // -2
+  <
+    O extends object,
+    K1 extends keyof O,
+    K2 extends keyof O[K1] // -3
+  >(o: O, k1: K1, k2: K2): O[K1][K2] // -4
+  <
+    O extends object,
+    K1 extends keyof O,
+    K2 extends keyof O[K1],
+    K3 extends keyof O[K1][K2]
+  >(o: O, k1: K1, k2: K2, k3: K3): O[K1][K2][K3] // -5
+}
+
+let get: Get = (object: any, ...keys: string[]) => {
+  let result = object
+  keys.forEach(k => result = result[k])
+  return result
+}
+
+get(activityLog, 'events', 0, 'type') // 'Read' | 'Write'
+
+
+get(activityLog, 'bad') // Error TS2345: Argument of type '"bad"'
+                        // is not assignable to parameter of type
+                        // '"lastEvent" | "events"'.
+```
+
+#### TSC Flag: keyofStringsOnly 
+
+객체의 key는 number, symbol, string 이 될 수 있고 런타임에 모두 형변환되어 string 으로 변한다. 
+
+이 때문에 key of 연산은 return 값이 `number | string | symbol` 이 될 수 있다. 그러나 keyof 연산을 할 때 다소 장황할 수 잇으므로, 이를 string으로 강제할 수 있는데,  tsconfig.json 에서 flag 인 `keyofStringsOnly` field를 enable 하면된다.  
+ (though if you call it on a more specific shape, TypeScript can infer a more specific subtype of that union). 
+
 ## Advanced Function Types
 ## Conditonal Types
 ## Escape Hatches
