@@ -779,7 +779,64 @@ get(activityLog, 'bad') // Error TS2345: Argument of type '"bad"'
 객체의 key는 number, symbol, string 이 될 수 있고 런타임에 모두 형변환되어 string 으로 변한다. 
 
 이 때문에 key of 연산은 return 값이 `number | string | symbol` 이 될 수 있다. 그러나 keyof 연산을 할 때 다소 장황할 수 잇으므로, 이를 string으로 강제할 수 있는데,  tsconfig.json 에서 flag 인 `keyofStringsOnly` field를 enable 하면된다.  
- (though if you call it on a more specific shape, TypeScript can infer a more specific subtype of that union). 
+(though if you call it on a more specific shape, TypeScript can infer a more specific subtype of that union). 
+
+### The Record Type 
+
+Record를 사용하여 각 요일에서 다음 요일까지 map을 작성해 볼 수 있다. Record를 사용하면 nextDay의 키와 값에 제약을 둘 수 있습니다.
+Record 는 2개의 generic을 받는데 첫번째 제네릭이 key 로 쓰이고 두번째 generic이 value로 쓰인다. 
+
+
+```ts
+type Weekday = 'Mon' | 'Tue'| 'Wed' | 'Thu' | 'Fri'
+type Day = Weekday | 'Sat' | 'Sun'
+
+let nextDay: Record<Weekday, Day> = {
+  Mon: 'Tue'
+}
+// Error TS2739: Type '{Mon: "Tue"}' is missing the following properties from type 'Record<Weekday, Day>': Tue, Wed, Thu, Fri.
+```
+위에서 에러가 발생했는데, 첫번째 generic으로 전달된 부분에서 Tue, Wed, Thu, Fri 쪽에 대한 mapping 이 이루어지지 않아서 에러가 발생했다. 그 부분을 채우면 에러는 사라진다.
+```ts
+let nextDay: Record<Weekday, Day> = {
+	Mon: 'Tue',
+	Tue: 'Wed',
+	Wed: 'Thu',
+	Thu: 'Fri',
+	Fri: 'Mon'
+}
+```
+Record는 일반 object index signature왇 비교할 추가적인 기능을  제공한다. regular index signature 를 사용하면 object value의 type을 제한 할 수 있지만 key는 regular string, number 또는 Symbol 일 수 있습니다. Record를 사용하면 obejct key의 type을 string, number의 subtype 으로 제한 할 수 있다. 
+
+#### 하기는 martin 블로그의 참고 내용이다.
+https://velog.io/@zeros0623/TypeScript-%EA%B3%A0%EA%B8%89-%ED%83%80%EC%9E%85
+Record 타입은 총 두개의 제네릭 타입을 받을 수 있다. 첫번째 제네릭 타입 K은 프로퍼티 타입으로, 두번째 제네릭 타입 T은 값의 타입으로 사용된다.
+
+```ts
+type Record<K extends keyof any, T> = {
+    [P in K]: T;
+};
+```
+Record 타입의 구조체를 살펴보면 일반적으로 사용하는 Object와 닮은 꼴을 하고 있다는 것을 알 수 있다. 아래와 같이 사용할 수 있다.
+```ts
+type IFooBar = {
+  foo: string;
+  bar: string;
+};
+
+type IHelloWorld = 'hello' | 'world';
+
+const x: Record<IHelloWorld, IFooBar> = {
+  hello: {
+    foo: 'foo',
+    bar: 'bar'
+  },
+  world: {
+    foo: 'foo',
+    bar: 'bar'
+  }
+}
+```
 
 ## Advanced Function Types
 ## Conditonal Types
