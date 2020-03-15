@@ -837,9 +837,315 @@ const x: Record<IHelloWorld, IFooBar> = {
   }
 }
 ```
+### Mapped Type 
+[mapped type에 대한 한국 블로그 글](https://velog.io/@zeros0623/TypeScript-%EA%B3%A0%EA%B8%89-%ED%83%80%EC%9E%85#mapped-types)
+```ts
+type Weekday = 'Mon' | 'Tue'| 'Wed' | 'Thu' | 'Fri'
+type Day = Weekday | 'Sat' | 'Sun'
+
+let nextDay: {[K in Weekday]: Day} = {
+  Mon: 'Tue'
+}
+``` 
+This is another way to get a helpful hint for how to fix what you missed: 
+```ts
+Error TS2739: Type '{Mon: "Tue"}' is missing the following properties
+from type '{Mon: Weekday; Tue: Weekday; Wed: Weekday; Thu: Weekday;
+Fri: Weekday}': Tue, Wed, Thu, Fri.
+```
+
+Record Type 은 내부적으로 mapped type을 쓰고 있음 
+```ts
+type Record<K extends keyof any, T> = {
+  [P in K]: T
+}
+
+```
+mapped type을 사용하면 object의 key와 value에 type을 부여 할 수있을뿐만 아니라 어떤 value type 에 어떤 key name 이 쓰여야 하는지 강제하기 때문에 더 강력하다.
+
+또한 이 이외에 장점을 열거할 수 있는데, 그 장점은 다음과 같다. 
+ 
+```ts
+type Account = {
+  id: number
+  isEmployee: boolean
+  notes: string[]
+}
+
+// Make all fields optional
+type OptionalAccount = {
+  [K in keyof Account]?: Account[K] 
+}
+
+// Make all fields nullable
+type NullableAccount = {
+  [K in keyof Account]: Account[K] | null 
+}
+
+// Make all fields read-only
+type ReadonlyAccount = {
+  readonly [K in keyof Account]: Account[K] 
+}
+
+// Make all fields writable again (equivalent to Account)
+type Account2 = {
+   // -(minus) operator 를 통해 readonly 속성을 제거할 수 있다.
+  -readonly [K in keyof ReadonlyAccount]: Account[K] 
+}
+
+// Make all fields required again (equivalent to Account)
+type Account3 = {
+  // -(minus) operator 를 통해 optional 속성을 제거할 수 있다.
+  [K in keyof OptionalAccount]-?: Account[K] 
+}
+```
+#### `-`(minus) operator 
+이는 `+` operator 의 반대인데, 우리가 보통 readonly, ? 등을 기술할 때 암묵적을 + 가 생략되므로 + operator 를 잘 쓰지 않는다.
+
+### Built-in mapped types
+```ts
+Record<Keys, Values> 
+// An object with keys of type Keys and values of type Values 
+
+Partial<Object> 
+// Marks every field in Object as optional 
+
+Required<Object> 
+
+// Marks every field in Object as nonoptional 
+
+Readonly<Object> 
+// Marks every field in Object as read-only 
+
+Pick<Object, Keys> 
+// Returns a subtype of Object, with just the given Keys
+```
+
+### Companion Object Pattern
+보통은 objcect 와 class 가 같은 name 을 공유하는 pattern 이다. typescirpt 에서는 type과 object 가 같은 name 을 공유하는 pattern 을 말한다. 그 형태는 아래 코드와 같다.
+
+```ts
+type Currency = {
+  unit: 'EUR' | 'GBP' | 'JPY' | 'USD'
+  value: number
+}
+
+let Currency = {
+  DEFAULT: 'USD',
+  from(value: number, unit = Currency.DEFAULT): Currency {
+    return {unit, value}
+  }
+}
+```
+
+TypeScript에서 type과 value은 별도의 name space 에 존재한다. 이에 대한 자세한 내용은 "Declaration Merging"에 나와 있다. 이것은 즉, 동일한 scope에서 type과 value에 동일한 name (이 예에서는 Currency)을 binding 할 수 있습니다. companion objcet pattern 을 사용하여이 별도의 name space를 활용하여 name 을  두 번, 즉 type으로, value 로 선언한다. 이 패턴에는 몇 가지 장점이 있다. Currency와 같이 단일 name에 type 과 value 정보를  의미론적(sementic) 하게 그룹화 할 수 있다. 또한 consumer 가 동시에 type 과 value 를 import 할 수 있다. 
+
+```ts
+import {Currency} from './Currency'
+
+let amountDue: Currency = { 
+  unit: 'JPY',
+  value: 83733.10
+}
+
+let otherAmountDue = Currency.from(330, 'EUR')  
+
+```
+`import` 한번에 Currency 를 type 과 value 로 사용할 수 있었다. 
 
 ## Advanced Function Types
+
+### Improving Type Inference for Tuples
+
+TypeScript에서 Tuple을 선언하면 TypeScript는 해당 Tuple type을 infer하는 데 관대(lenient)하다. 튜플의 길이와 어떤 자리가 보다 정확하게 어떤 type을 가지는지를 무시하고, 우리가 기술한 것 에 따라 가장 general 하게 type을 infer한다.
+
+```ts
+let a = [1, true] // (number | boolean)[]
+```
+> type casting 이란 형 변환을 의마한다.
+
+그러나 우리는 때론 엄격한 타입 추론을 원하는데, fixed lenght tuple 이라던가, type assertion 을 통해 tuple 을 tuple type으로 타입 캐스팅(형 변환) 하는 것이 이에 해당 한다. 또한 const 를 써서 tuple type 을 좀 더 narrowly 하며 추론할 수 있다. 동시에 해당 type 은 readonly 상태가 된다. 
+
+그런데 만약 tuple 에 대해 tuple type을 정의하고 싶은데 type asserton 을 사용하거나, 그리고 const를 사용해서 해당 type 을 readonly 를 만들고 싶지는 않다. 그런 방법을 제외하고  목적을 달성하고 싶다면 어떻게 해야할까? 
+
+그럴 때 우리는 rest parameter 를 활용할 수 있다.
+
+```ts
+function tuple<  // tuple function 을 선언했다.
+  T extends unknown[] // unknown 의 subtype이란 뜻은 어떤 종류의 array 가 들어와도 된다는 뜻이다. 
+>(
+  ...ts: T // T 가 rest parmater의 type을 정의하고 있으므로, 타입스크립트가 rest paramter를 위한 tuple 타입을 infer 한다. 
+): T { 
+// tuple 함수는 ts를 유추 한 것과 동일한 튜플 유형의 값을 반환한다
+  return ts 
+}
+
+let a = tuple(1, true) // [number, boolean]
+```
+위와 같이 tuple 함수를 사용하면 코드에서 많은 튜플 타입을 사용할 때 type assertion 을 일일히 선언하는 수고를 덜 수 있다. 
+
+예전에 아래와 같은 내용을 살펴 본적 있다. 
+#### Using bounded polymorphism to model arity
+
+> ##### arity
+>
+> meaning: (logic, mathematics, computer science) The number of arguments or operands a function or operation takes. For a relation, the number of domains in the corresponding Cartesian product.
+> argument 가 몇개 들어올지 예상하지 못하는 때에도 bounded polymorphism 이 쓰일 수 있다.
+
+```ts
+function call(f: (...args: unknown[]) => unknown, ...args: unknown[]): unknown {
+  return f(...args);
+}
+
+function fill(length: number, value: string): string[] {
+  return Array.from({ length }, () => value);
+}
+
+call(fill, 10, 'a'); // evaluates to an array of 10 'a's
+
+function call<T extends unknown[], R>(f: (...args: T) => R, ...args: T): R {
+  return f(...args);
+}
+
+// 이로써 타입 추론이 가능해지고, 잘못된 타입 이나 타입 갯수를 입력하면 오류를 발생시킨다.
+
+let a = call(fill, 10, 'a'); // string[]
+let b = call(fill, 10); // Error TS2554: Expected 3 arguments; got 2.
+let c = call(fill, 10, 'a', 'z'); // Error TS2554: Expected 3 arguments; got 4.
+```
+### User-Defined Type Guards
+boolean 을 return 하는 함수가 있다고 치자. 그런데 가끔은 boolean을 return 하는 함수가 boolean을 리턴한다는 정보를 말하는 것으로 충분하지 않은 상황이 있다. 다음 코드를 보며 이해하자.
+```ts
+function isString(a: unknown): boolean {
+  return typeof a === 'string'
+}
+
+isString('a') // evaluates to true
+isString([7]) // evaluates to false
+```
+위 함수가 리턴한 값의 type 은 함수 선언에 명시된 return type 에 따라 boolean 이다. 그런데 다음과 같이 isString 함수가 실제 코드에 쓰일 때는 어떨까? 
+```ts
+function parseInput(input: string | number) {
+  let formattedInput: string
+  if (isString(input)) {
+    formattedInput = input.toUpperCase() // Error TS2339: Property 'toUpperCase'
+  }                                      // does not exist on type 'number'.
+}
+```
+`isString` 을 통과했다면 input 이 string type 으로 refinement 되는게 더 바람직하지 않은가? 하지만 scope를 벗어낫을 때 (function에서 return 이 된 경우)는 더 이상 type refinement 가 작동하지 않는다. 
+
+이런 이슈를 어떻게 해결할 수 있을까? scope를 벗아난다 하더라도 refinement 된 string 타입을 얻고 싶다면? `user-defined type guard` 가 필요한 순간이다.
+
+```ts
+function isString(a: unknown): a is string {
+  return typeof a === 'string'
+}
+```
+Type Guard는 내장 TypeScript 기능이며 typeof 및 instanceof로 type을 refine 할 수 있는데, 가끔 사용자가 type guard를 스스로 써야 할 때가 있다. function 뒤에 is 연산자를 붙여서 user defined type guard를 만들 수 있다. is 연산자는 하나의 paramter 밖에 못 받을 뿐, 이것이 하나의 타입만으로 제한된 다는 뜻은 아니다. 다음 예제를 보자.
+
+```ts
+type LegacyDialog = // ...
+type Dialog = // ...
+
+function isLegacyDialog(
+  dialog: LegacyDialog | Dialog
+): dialog is LegacyDialog {
+  // ...
+}
+```
+user defined type guard를 쓸일이 그렇게 많지는 않겠지만, 그것이 필요한 순간에 코드를 클린하고, 재사용가능하게 짤 수 있다. user defined type guard 가 없다면 매 라인을 typeof, instanceof 연산자로 떡칠해야할 것이다. 
+
+
 ## Conditonal Types
+
+### 참고한 내용 
+
+- [조건부 타입 velol 블로그](https://velog.io/@zeros0623/TypeScript-%EA%B3%A0%EA%B8%89-%ED%83%80%EC%9E%85#%EC%A1%B0%EA%B1%B4%EB%B6%80-%ED%83%80%EC%9E%85conditional-types)
+
+- [infer 에 대한 설명](https://dev.to/aexol/typescript-tutorial-infer-keyword-2cn)
+
+Conditonal Type 는 타입을 간단히 말하면 이런 것이다. 타입 T를 선언하는데,  U 와 V 에 따라서 타입 T를 선언한다. 구체적으로 U <: V(U가 V의 subtype 공변)이면 타입 T를 A에 할당한다. 코드로 보면 다음과 같다.
+
+```ts
+type IsString<T> = T extends string // condition part 
+  ? true 
+  : false 
+
+type A = IsString<string> // true
+type B = IsString<number> // false
+```
+`T extends string ?` 는 타입 T가 `string`  type의 subtype 인지 검사한다. 
+
+regular ternary expression 과 마찬가지로 conditonal type도 중첩 할 수 있다. conditional type에는 type alias 만 쓰도록 제한되지 않는다. iinterfaces, classes, parameter types, and generic defaults in functions and methods.를 사용할 수있는 거의 모든 곳에서 사용할 수 있다.
+
+### Distributive Conditional 
+
+예제와 같은 간단한 조건을 표현할 수 있지만 conditional types, overloaded function signatures, and mapped types 을 사용하여 TypeScript에서 다양한 방식으로 살펴본 결과, 조건부 유형을 통해 더 많은 작업을 수행 할 수 있다. 그 이유는 그들이 분배 법칙을 따르기 때문이다 . 즉, 조건부 유형 인 경우 오른쪽의 표현식은 표 6-1의 왼쪽 표현식과 동일하다.
+
+![Distributing conditional type](https://imgur.com/7mR8iji.png)
+
+예제를 통해 좀 더 구체적으로 살펴보자. 타입 T 변수를 받아 T 타입의 배열을 반환하는 함수가 있다고 가정해보자. 우리가 타입 T에 union 을 전달하면 어떻게 될까? 
+
+```ts
+type ToArray<T> = T[]
+type A = ToArray<number>          // number[]
+type B = ToArray<number | string> // (number | string)[]
+```
+결과는 직관적이다. 그렇다면 conditional type을 전달한다면 어떻게 될까? (conditional type의 경우 두 분기가 모두 T[]로 해석되므로 여기서 실제로 아무 작업도 수행하지 않는다. 여기서는 그저 TypeScript가 T를 튜플 타입에 분배(distribute) 하도록 지시한다 ) 결과는 다음과 같다. 
+
+```ts
+
+type ToArray<T> = T[]
+type A = ToArray<number>          // number[]
+type B = ToArray<number | string> // (number | string)[]
+
+// Conditonal Type을 쓰는 경우 
+type ToArray2<T> = T extends unknown ? T[] : T[]
+type A = ToArray2<number> // number[]
+type B = ToArray2<number | string> // number[] | string[]
+
+```
+conditional type 을 가져와 각 element 에 배포한다. `(number | string)[]`  가 아닌 `number[] | string[]`의 결과를 얻을 수 있다. 그런데 이걸 어디다 쓰는가? 안전하게 common operation(`&, |`과 같은 식) 을 표현할 수 있다. 예를들면 타입 T와 U 가 있을 때, T에는 있고, U에는 없는 타입을 선언할 수 있다. 
+```ts
+type Without<T, U> = T extends U ? never : T 
+
+//You use Without like so: 
+type A = Without<
+  boolean | number | string, boolean
+> // number | string
+```
+타입스크립트가 어떻게 이 타입을 계산하는지 함께 살펴보자.
+
+1. Start with the inputs:  
+```ts
+type A = Without<boolean | number | string, boolean> 
+```
+2. Distribute the condition over the union:  
+```ts
+ type A = Without<boolean, boolean>
+       | Without<number, boolean>
+       | Without<string, boolean> 
+```       
+3. Substitute in Without’s definition and apply T and U:  
+```ts
+type A = (boolean extends boolean ? never : boolean)
+       | (number extends boolean ? never : number)
+       | (string extends boolean ? never : string) 
+```       
+4. Evaluate the conditions:  
+```ts
+type A = never
+       | number
+       | string 
+```
+5. Simplify:
+
+```ts
+type A = number | string
+```
+
+If it wasn’t for the distributive property of conditional types, we would have ended up with never (if you’re not sure why, walk through what would happen for yourself!).
+
 ## Escape Hatches
 ## Simulating Nominal Types
 ## Safely Extending the Prototype
