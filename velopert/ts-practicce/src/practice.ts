@@ -60,23 +60,51 @@ shapes.forEach(shape => {
 
 // 일반 객체를 interface 로 타입 설정하기 
 
-interface Person {
+//interface Person {
+//	name: string;
+//	age?: number; 
+//}
+
+//interface Developer extends Person {
+//	skills: string[];
+//}
+
+//const person: Person = {
+//	name: '김사람',
+//	age: 20
+//};
+
+//const expert: Developer = {
+//	name: '김개발',
+//	skills: ['javascript', 'react']
+//};
+
+//const people: Person[] = [person, expert];
+
+
+// Type Alias 사용하기 
+
+type Person = {
 	name: string;
-	age?: number; 
+	age?: number;
 }
 
-interface Developer extends Person {
-	skills: string[];
+type Developer = Person & {
+	skills: string[]
 }
 
 const person: Person = {
-	name: '김사람',
-	age: 20
-};
+	name: '김개발'
+}
 
 const expert: Developer = {
-	name: '김개발',
-	skills: ['javascript', 'react']
+  name: '김개발',
+  skills: ['javascript', 'react']
 };
 
-const people: Person[] = [person, expert];
+type People = Person [];
+const people: People = [person, expert];
+
+type Color = 'red' | 'orange' | 'yellow';
+const color: Color = 'red';
+const colors: Color[] = ['red', 'orange'];
