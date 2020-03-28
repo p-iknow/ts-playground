@@ -1146,6 +1146,8 @@ type A = number | string
 
 If it wasn’t for the distributive property of conditional types, we would have ended up with never (if you’re not sure why, walk through what would happen for yourself!).
 
+### infer kewword
+
 ## Escape Hatches
 ## Simulating Nominal Types
 ## Safely Extending the Prototype
